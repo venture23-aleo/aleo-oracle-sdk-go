@@ -180,7 +180,13 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	default:
 	}
 
-	resChan <- resp
+	// Non-blocking write to success channel (successInternalCh)
+    select {
+    case resChan <- resp:
+    case <-ctx.Done():
+    default: // drop if already full
+    }
+
 }
 
 // creates an HTTP request of provided method (can be only GET or POST) to the provided URL, with an optional body of RequestType,
