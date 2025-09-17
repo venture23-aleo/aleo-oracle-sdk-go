@@ -207,25 +207,23 @@ func (c *Client) GetEnclavesInfo(options *EnclaveInfoOptions) ([]*EnclaveInfo, [
 	}
 	close(errChan)
 
-	// one or more of the requests have failed
-	if len(errChan) > 0 {
-		var reqErrors []error
-		for err := range errChan {
-			reqErrors = append(reqErrors, err)
-		}
+	var reqErrors []error
+	for err := range errChan {  // safely collect all errors
+		reqErrors = append(reqErrors, err)
+	}
 
-		// all request have failed
-		if len(reqErrors) == numServices {
-			return nil, reqErrors
-		}
+	if len(reqErrors) == numServices {
+		return nil, reqErrors  // all requests failed
 	}
 
 	var info []*EnclaveInfo
 	for enclaveUrl, resChan := range resChanMap {
 		enclaveInfo := <-resChan
-		enclaveInfo.EnclaveUrl = enclaveUrl
-		info = append(info, enclaveInfo)
+		if enclaveInfo != nil {
+			enclaveInfo.EnclaveUrl = enclaveUrl
+			info = append(info, enclaveInfo)
+		}
 	}
 
-	return info, nil
+	return info, reqErrors
 }
