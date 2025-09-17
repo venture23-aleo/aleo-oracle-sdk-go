@@ -526,7 +526,7 @@ func (c *Client) verifyReports(ctx context.Context, attestations []*AttestationR
 		return nil, errors.New("no valid attestations found")
 	}
 
-	return validAttestations, nil
+	return validAttestations, errors.New(result.ErrorMessage)
 }
 
 // TestSelector response, which contains information for debugging selectors for extracting AttestationData for calling Notarize.
