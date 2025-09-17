@@ -98,10 +98,12 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	defer wg.Done()
 
 	respObj, err := client.Do(req)
+
 	if err != nil {
 		errChan <- fmt.Errorf("failed to execute request: %w", err)
 		return
-	}
+	} 
+	defer respObj.Body.Close()
 
 	// check if cancelled
 	select {
@@ -110,12 +112,14 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	default:
 	}
 
-	body, err := io.ReadAll(respObj.Body)
+	// limit the response body size
+	limitReader := io.LimitReader(respObj.Body, MAX_RESPONSE_BODY_SIZE)
+
+	body, err := io.ReadAll(limitReader)
 	if err != nil {
 		errChan <- fmt.Errorf("failed to read response body: %w", err)
 		return
 	}
-	defer respObj.Body.Close()
 
 	resp := new(ResponseType)
 	respError := new(oracleError)
