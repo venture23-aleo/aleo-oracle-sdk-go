@@ -78,8 +78,10 @@ func (c *Client) GetAttestedRandom(max *big.Int, options *NotarizationOptions) (
 	var attestations []*AttestationResponse
 	for enclaveUrl, resChan := range resChanMap {
 		resp := <-resChan
-		resp.EnclaveUrl = enclaveUrl
-		attestations = append(attestations, resp)
+		if resp != nil {
+			resp.EnclaveUrl = enclaveUrl
+			attestations = append(attestations, resp)
+		}
 	}
 
 	c.logger.Printf("Notarize: notarized and attested random number using %d attesters", len(c.notarizer))
