@@ -112,13 +112,23 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	default:
 	}
 
+	if respObj.ContentLength != -1 && respObj.ContentLength > MAX_RESPONSE_BODY_SIZE {
+		errChan <- fmt.Errorf("response body is too large")
+		return
+	}
+
 	// limit the response body size
-	limitReader := io.LimitReader(respObj.Body, MAX_RESPONSE_BODY_SIZE)
+	limitReader := io.LimitReader(respObj.Body, MAX_RESPONSE_BODY_SIZE+1)
 
 	body, err := io.ReadAll(limitReader)
 	if err != nil {
 		errChan <- fmt.Errorf("failed to read response body: %w", err)
 		return
+	}
+
+	if int64(len(body)) > MAX_RESPONSE_BODY_SIZE {
+    	errChan <- fmt.Errorf("response body exceeded %d bytes", MAX_RESPONSE_BODY_SIZE)
+    	return
 	}
 
 	resp := new(ResponseType)
