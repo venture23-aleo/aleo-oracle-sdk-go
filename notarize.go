@@ -170,7 +170,7 @@ type AttestationRequest struct {
 	RequestHeaders map[string]string `json:"requestHeaders,omitempty"`
 }
 
-// NotarizationOptions contains ptional parameters that you can provide to Notarize method.
+// NotarizationOptions contains optional parameters that you can provide to Notarize method.
 //
 // If not provided, default values will be used.
 type NotarizationOptions struct {
