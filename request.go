@@ -31,6 +31,7 @@ type requestContext struct {
 // Builds a URL using the backend information, path, and optionally resolved IP address.
 // Do not use with queries, they will be escaped
 func getFullAddress(path string, queryParams map[string]string, backend *CustomBackendConfig, ip *string) string {
+	backendClone := *backend
 	full := new(url.URL)
 
 	if queryParams != nil {
@@ -41,30 +42,30 @@ func getFullAddress(path string, queryParams map[string]string, backend *CustomB
 		full.RawQuery = query.Encode()
 	}
 
-	if backend.HTTPS {
+	if backendClone.HTTPS {
 		full.Scheme = "https"
-		if backend.Port == 0 {
-			backend.Port = 443
+		if backendClone.Port == 0 {
+			backendClone.Port = 443
 		}
 	} else {
 		full.Scheme = "http"
-		if backend.Port == 0 {
-			backend.Port = 80
+		if backendClone.Port == 0 {
+			backendClone.Port = 80
 		}
 	}
 
 	// if we're using an IP address, we always add the port.
 	// if we're not, then add the port only if it's not standard for the scheme
 	if ip == nil {
-		full.Host = backend.Address
-		if (backend.HTTPS && backend.Port != 443) || (!backend.HTTPS && backend.Port != 80) {
-			full.Host = fmt.Sprintf("%s:%d", backend.Address, backend.Port)
+		full.Host = backendClone.Address
+		if (backendClone.HTTPS && backendClone.Port != 443) || (!backendClone.HTTPS && backendClone.Port != 80) {
+			full.Host = fmt.Sprintf("%s:%d", backendClone.Address, backendClone.Port)
 		}
 	} else {
-		full.Host = fmt.Sprintf("%s:%d", *ip, backend.Port)
+		full.Host = fmt.Sprintf("%s:%d", *ip, backendClone.Port)
 	}
 
-	full.Path, _ = url.JoinPath(backend.ApiPrefix, path)
+	full.Path, _ = url.JoinPath(backendClone.ApiPrefix, path)
 
 	return full.String()
 }

@@ -20,6 +20,17 @@ type Client struct {
 	transport http.RoundTripper
 }
 
+func cloneDefaultNotarizers() []*CustomBackendConfig {
+    clones := make([]*CustomBackendConfig, len(DEFAULT_NOTARIZATION_BACKENDS))
+    for i, cfg := range DEFAULT_NOTARIZATION_BACKENDS {
+        if cfg != nil {
+            copyCfg := *cfg // struct copy
+            clones[i] = &copyCfg
+        }
+    }
+    return clones
+}
+
 // NewClient creates a new client using the provided configuration. Configuration is optional.
 // If configuration is not provided, will use 1 notarizer and a verifier hosted by the developers,
 // no logging, a transport similar to [http.DefaultTransport] for transport.
@@ -45,7 +56,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		client.notarizer[0] = config.NotarizerConfig
 		client.logger.Println("Oracle Client: using custom notarizer -", getFullAddress("", nil, config.NotarizerConfig, nil))
 	} else {
-		client.notarizer = DEFAULT_NOTARIZATION_BACKENDS
+		client.notarizer = cloneDefaultNotarizers()
 	}
 
 	// Use the configured verification backend.
@@ -54,7 +65,8 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		client.verifier = config.VerifierConfig
 		client.logger.Println("Oracle Client: using custom verifier -", getFullAddress("", nil, config.VerifierConfig, nil))
 	} else {
-		client.verifier = DEFAULT_VERIFICATION_BACKEND
+		verifierClone := *DEFAULT_VERIFICATION_BACKEND
+		client.verifier = &verifierClone
 	}
 
 	if config.Transport != nil {
