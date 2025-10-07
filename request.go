@@ -41,6 +41,10 @@ func getFullAddress(path string, queryParams map[string]string, backend *CustomB
 		full.RawQuery = query.Encode()
 	}
 
+	if backend == nil {
+		return ""
+	}
+
 	if backend.HTTPS {
 		full.Scheme = "https"
 		if backend.Port == 0 {
@@ -211,26 +215,35 @@ func executeRequest[RequestType interface{}, ResponseType interface{}](path stri
 		resolvedAddresses = []string{ctx.Backend.Address}
 	}
 
+	if ctx.Transport == nil {
+		errChan <- fmt.Errorf("executeRequest: transport is nil for %s", host)
+		return
+	} else if _, ok := ctx.Transport.(*http.Transport); !ok {
+		errChan <- fmt.Errorf("executeRequest: transport is not of type *http.Transport for %s", host)
+		return
+	}
+
 	transport := ctx.Transport
 
 	// the infrastructure uses SNI for routing. since we looked up the hostname
 	// and we want to send requests to all IPs, we have to use the addresses for request.
 	// this also means we have to set the servername in the TLS config for SNI.
-	transportRaw := *(transport.(*http.Transport))
-	if transportRaw.TLSClientConfig == nil {
-		transportRaw.TLSClientConfig = &tls.Config{}
+	origTransport := transport.(*http.Transport)
+	transportCloned := origTransport.Clone()
+	if transportCloned.TLSClientConfig == nil {
+		transportCloned.TLSClientConfig = &tls.Config{}
 	}
 
 	// Set SNI for routing
-	transportRaw.TLSClientConfig.ServerName = ctx.Backend.Address
+	transportCloned.TLSClientConfig.ServerName = ctx.Backend.Address
 	// Since our infrastructure performs routing on TCP level to the notarizer, which then upgrades
 	// protocol to HTTP, changing the SNI to verifier.aleooracle.xyz doesn't actually reroute us to the verifier
 	// because we're stuck in the notarizer's HTTP connection. Disabling HTTP "keep alive"s allows the proxy
 	// to escape the notarizer's HTTP connection and route again on TCP level to the verifier's HTTP server.
 	// This wasn't relevant when resolving was disabled for the verifier.
-	transportRaw.DisableKeepAlives = true
+	transportCloned.DisableKeepAlives = true
 
-	transport = &transportRaw
+	transport = transportCloned
 
 	// common client to use for all resolved IP addresses. it has the SNI already configured
 	client := &http.Client{
@@ -274,7 +287,7 @@ func executeRequest[RequestType interface{}, ResponseType interface{}](path stri
 
 		httpReq, err := constructHttpRequest(internalCtx, path, queryParams, usedIp, reqBody)
 		if err != nil {
-			errChan <- fmt.Errorf("executeRequest: failed to create a request for %w: %w", basicRequestErr, err)
+			errChan <- fmt.Errorf("executeRequest: failed to create a request for %s: %w", basicRequestErr, err)
 			return
 		}
 
