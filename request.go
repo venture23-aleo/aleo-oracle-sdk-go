@@ -287,7 +287,7 @@ func executeRequest[RequestType interface{}, ResponseType interface{}](path stri
 
 		httpReq, err := constructHttpRequest(internalCtx, path, queryParams, usedIp, reqBody)
 		if err != nil {
-			errChan <- fmt.Errorf("executeRequest: failed to create a request for %s: %w", basicRequestErr, err)
+			errChan <- fmt.Errorf("executeRequest: failed to create a request for %w: %w", basicRequestErr, err)
 			return
 		}
 
