@@ -22,11 +22,11 @@ type SgxAleoInfo struct {
 
 // Contains information about an SGX enclave.
 type SgxInfo struct {
-	SecurityVersion uint        `json:"securityVersion"` // Security version of the enclave. For SGX enclaves, this is the ISVSVN value.
+	SecurityVersion uint16      `json:"securityVersion"` // Security version of the enclave. For SGX enclaves, this is the ISVSVN value.
 	Debug           bool        `json:"debug"`           // If true, the report is for a debug enclave.
-	UniqueID        []byte      `json:"uniqueId"`        // The unique ID for the enclave. For SGX enclaves, this is the MRENCLAVE value.
-	SignerID        []byte      `json:"signerId"`        // The signer ID for the enclave. For SGX enclaves, this is the MRSIGNER value.
-	ProductID       []byte      `json:"productId"`       // The Product ID for the enclave. For SGX enclaves, this is the ISVPRODID value.
+	UniqueID        string      `json:"uniqueId"`        // The unique ID for the enclave. For SGX enclaves, this is the MRENCLAVE value.
+	SignerID        string      `json:"signerId"`        // The signer ID for the enclave. For SGX enclaves, this is the MRSIGNER value.
+	ProductID       string      `json:"productId"`       // The Product ID for the enclave. For SGX enclaves, this is the ISVPRODID value.
 	Aleo            SgxAleoInfo `json:"aleo"`            // Some of the SGX report values encoded for Aleo.
 	TCBStatus       uint        `json:"tcbStatus"`       // The status of the enclave's TCB level.
 }
