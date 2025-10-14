@@ -105,11 +105,9 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	} 
 	defer respObj.Body.Close()
 
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-		return
-	default:
+	if err := ctx.Err(); err != nil {
+		errChan <- fmt.Errorf("request cancelled: %w", err)
+    	return
 	}
 
 	if respObj.ContentLength != -1 && respObj.ContentLength > MAX_RESPONSE_BODY_SIZE {
@@ -133,13 +131,6 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 
 	resp := new(ResponseType)
 	respError := new(oracleError)
-
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-		return
-	default:
-	}
 
 	// decode as an error first since we know the exact type and can check if it's the error response or success response
 	err = json.Unmarshal(body, respError)
@@ -168,16 +159,9 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	// if there's no error message, and the status code is not 200, something went really wrong, e.g. at the routing/balancing level.
 	// note that this is different from the resp.ResponseStatusCode in AttestationResponse and TestSelectorResponse since it's the response status code
 	// of the attestation target.
-	if respObj.StatusCode != 200 {
+	if respObj.StatusCode != http.StatusOK {
 		errChan <- fmt.Errorf("request failed: %s", respObj.Status)
 		return
-	}
-
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-		return
-	default:
 	}
 
 	// there's no error message, test if it's a successful response
@@ -188,10 +172,9 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 		return
 	}
 
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-	default:
+	if err := ctx.Err(); err != nil {
+		errChan <- fmt.Errorf("request cancelled: %w", err)
+    	return
 	}
 
 	resChan <- resp
