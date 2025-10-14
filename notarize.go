@@ -511,6 +511,10 @@ func (c *Client) verifyReports(ctx context.Context, attestations []*AttestationR
 
 	result := <-resChan
 
+	if result == nil {
+		return nil, errors.New("no valid attestations found")
+	}
+
 	if len(result.ValidReports) == 0 {
 		return nil, errors.New(result.ErrorMessage)
 	}
@@ -618,8 +622,10 @@ func (c *Client) TestSelector(req *AttestationRequest, options *TestSelectorOpti
 	var result []*TestSelectorResponse
 	for enclaveUrl, resChan := range resChanMap {
 		resp := <-resChan
-		resp.EnclaveUrl = enclaveUrl
-		result = append(result, resp)
+		if resp != nil {
+			resp.EnclaveUrl = enclaveUrl
+			result = append(result, resp)
+		}
 	}
 
 	return result, nil
