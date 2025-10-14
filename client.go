@@ -1,6 +1,7 @@
 package aleo_oracle_sdk
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -84,6 +85,15 @@ func NewClient(config *ClientConfig) (*Client, error) {
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		}
+	}
+
+	if config.MtlsConfig != nil {
+		var err error
+		client.transport, err = config.MtlsConfig.applyToTransport(client.transport)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply mTLS config: %w", err)
+		}
+		client.logger.Println("Oracle Client: mTLS configuration applied")
 	}
 
 	return client, nil
