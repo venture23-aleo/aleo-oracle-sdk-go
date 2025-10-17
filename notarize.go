@@ -55,15 +55,13 @@ const (
 	ENCODING_OPTIONS_VALUE_INT    EncodingOptionsValueType = "int"    // Extracted value is interpreted as an unsigned decimal integer up to 64 bits in size
 )
 
-var (
-	// Default headers that will be added to the attestation request.
-	DEFAULT_NOTARIZATION_HEADERS = map[string]string{
-		"Accept":                    "*/*",
-		"User-Agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-		"Upgrade-Insecure-Requests": "1",
-		"DNT":                       "1",
-	}
-)
+// Default headers that will be added to the attestation request.
+var DEFAULT_NOTARIZATION_HEADERS = map[string]string{
+	"Accept":                    "*/*",
+	"User-Agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+	"Upgrade-Insecure-Requests": "1",
+	"DNT":                       "1",
+}
 
 // EncodingOptions is a type containing information about how Notarization Backend should interpret the Attestation Data to encode it to Aleo format.
 // Data will be encoded to Aleo "u128" to allow for usage inside of Aleo programs.
@@ -170,7 +168,7 @@ type AttestationRequest struct {
 	RequestHeaders map[string]string `json:"requestHeaders,omitempty"`
 }
 
-// NotarizationOptions contains ptional parameters that you can provide to Notarize method.
+// NotarizationOptions contains optional parameters that you can provide to Notarize method.
 //
 // If not provided, default values will be used.
 type NotarizationOptions struct {
@@ -314,7 +312,8 @@ type AttestationResponse struct {
 func (c *Client) Notarize(req *AttestationRequest, options *NotarizationOptions) ([]*AttestationResponse, []error) {
 	// configure default options
 	if options == nil {
-		options = DEFAULT_NOTARIZATION_OPTIONS
+		clone := *DEFAULT_NOTARIZATION_OPTIONS
+		options = &clone
 	}
 
 	// configure default attestation timeout context
@@ -368,10 +367,15 @@ type attestationRequestMessage struct {
 }
 
 func (c *Client) createAttestation(ctx context.Context, req *AttestationRequest) ([]*AttestationResponse, []error) {
-	reqMessage := &attestationRequestMessage{
-		AttestationRequest: *req,
-		DebugRequest:       false,
-	}
+    clone := *req
+
+	if clone.RequestHeaders != nil {
+        newHeaders := make(map[string]string, len(clone.RequestHeaders))
+        for k, v := range clone.RequestHeaders {
+            newHeaders[k] = v
+        }
+        clone.RequestHeaders = newHeaders
+    }
 
 	numServices := len(c.notarizer)
 
@@ -383,9 +387,14 @@ func (c *Client) createAttestation(ctx context.Context, req *AttestationRequest)
 
 	// add default notarization headers
 	for header, value := range DEFAULT_NOTARIZATION_HEADERS {
-		if _, ok := req.RequestHeaders[header]; !ok {
-			req.RequestHeaders[header] = value
+		if _, ok := clone.RequestHeaders[header]; !ok {
+			clone.RequestHeaders[header] = value
 		}
+	}
+
+	reqMessage := &attestationRequestMessage{
+		AttestationRequest: clone,
+		DebugRequest:       false,
 	}
 
 	for _, serviceConfig := range c.notarizer {
@@ -511,6 +520,10 @@ func (c *Client) verifyReports(ctx context.Context, attestations []*AttestationR
 
 	result := <-resChan
 
+	if result == nil {
+		return nil, errors.New("no valid attestations found")
+	}
+
 	if len(result.ValidReports) == 0 {
 		return nil, errors.New(result.ErrorMessage)
 	}
@@ -526,7 +539,7 @@ func (c *Client) verifyReports(ctx context.Context, attestations []*AttestationR
 		return nil, errors.New("no valid attestations found")
 	}
 
-	return validAttestations, nil
+	return validAttestations, errors.New(result.ErrorMessage)
 }
 
 // TestSelector response, which contains information for debugging selectors for extracting AttestationData for calling Notarize.
@@ -618,8 +631,10 @@ func (c *Client) TestSelector(req *AttestationRequest, options *TestSelectorOpti
 	var result []*TestSelectorResponse
 	for enclaveUrl, resChan := range resChanMap {
 		resp := <-resChan
-		resp.EnclaveUrl = enclaveUrl
-		result = append(result, resp)
+		if resp != nil {
+			resp.EnclaveUrl = enclaveUrl
+			result = append(result, resp)
+		}
 	}
 
 	return result, nil
