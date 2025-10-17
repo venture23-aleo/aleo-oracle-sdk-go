@@ -55,15 +55,13 @@ const (
 	ENCODING_OPTIONS_VALUE_INT    EncodingOptionsValueType = "int"    // Extracted value is interpreted as an unsigned decimal integer up to 64 bits in size
 )
 
-var (
-	// Default headers that will be added to the attestation request.
-	DEFAULT_NOTARIZATION_HEADERS = map[string]string{
-		"Accept":                    "*/*",
-		"User-Agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-		"Upgrade-Insecure-Requests": "1",
-		"DNT":                       "1",
-	}
-)
+// Default headers that will be added to the attestation request.
+var DEFAULT_NOTARIZATION_HEADERS = map[string]string{
+	"Accept":                    "*/*",
+	"User-Agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+	"Upgrade-Insecure-Requests": "1",
+	"DNT":                       "1",
+}
 
 // EncodingOptions is a type containing information about how Notarization Backend should interpret the Attestation Data to encode it to Aleo format.
 // Data will be encoded to Aleo "u128" to allow for usage inside of Aleo programs.
