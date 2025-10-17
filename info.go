@@ -22,11 +22,11 @@ type SgxAleoInfo struct {
 
 // Contains information about an SGX enclave.
 type SgxInfo struct {
-	SecurityVersion uint        `json:"securityVersion"` // Security version of the enclave. For SGX enclaves, this is the ISVSVN value.
+	SecurityVersion uint16      `json:"securityVersion"` // Security version of the enclave. For SGX enclaves, this is the ISVSVN value.
 	Debug           bool        `json:"debug"`           // If true, the report is for a debug enclave.
-	UniqueID        []byte      `json:"uniqueId"`        // The unique ID for the enclave. For SGX enclaves, this is the MRENCLAVE value.
-	SignerID        []byte      `json:"signerId"`        // The signer ID for the enclave. For SGX enclaves, this is the MRSIGNER value.
-	ProductID       []byte      `json:"productId"`       // The Product ID for the enclave. For SGX enclaves, this is the ISVPRODID value.
+	UniqueID        string      `json:"uniqueId"`        // The unique ID for the enclave. For SGX enclaves, this is the MRENCLAVE value.
+	SignerID        string      `json:"signerId"`        // The signer ID for the enclave. For SGX enclaves, this is the MRSIGNER value.
+	ProductID       string      `json:"productId"`       // The Product ID for the enclave. For SGX enclaves, this is the ISVPRODID value.
 	Aleo            SgxAleoInfo `json:"aleo"`            // Some of the SGX report values encoded for Aleo.
 	TCBStatus       uint        `json:"tcbStatus"`       // The status of the enclave's TCB level.
 }
@@ -207,25 +207,23 @@ func (c *Client) GetEnclavesInfo(options *EnclaveInfoOptions) ([]*EnclaveInfo, [
 	}
 	close(errChan)
 
-	// one or more of the requests have failed
-	if len(errChan) > 0 {
-		var reqErrors []error
-		for err := range errChan {
-			reqErrors = append(reqErrors, err)
-		}
+	var reqErrors []error
+	for err := range errChan {  // safely collect all errors
+		reqErrors = append(reqErrors, err)
+	}
 
-		// all request have failed
-		if len(reqErrors) == numServices {
-			return nil, reqErrors
-		}
+	if len(reqErrors) == numServices {
+		return nil, reqErrors  // all requests failed
 	}
 
 	var info []*EnclaveInfo
 	for enclaveUrl, resChan := range resChanMap {
 		enclaveInfo := <-resChan
-		enclaveInfo.EnclaveUrl = enclaveUrl
-		info = append(info, enclaveInfo)
+		if enclaveInfo != nil {
+			enclaveInfo.EnclaveUrl = enclaveUrl
+			info = append(info, enclaveInfo)
+		}
 	}
 
-	return info, nil
+	return info, reqErrors
 }

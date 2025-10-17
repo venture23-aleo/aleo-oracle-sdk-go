@@ -21,7 +21,8 @@ func (c *Client) GetAttestedRandom(max *big.Int, options *NotarizationOptions) (
 
 	// configure default options
 	if options == nil {
-		options = DEFAULT_NOTARIZATION_OPTIONS
+		clone := *DEFAULT_NOTARIZATION_OPTIONS
+		options = &clone
 		// default notarization options require the notarized data to match, which is not possible with the random number
 		options.DataShouldMatch = false
 	}
@@ -78,8 +79,10 @@ func (c *Client) GetAttestedRandom(max *big.Int, options *NotarizationOptions) (
 	var attestations []*AttestationResponse
 	for enclaveUrl, resChan := range resChanMap {
 		resp := <-resChan
-		resp.EnclaveUrl = enclaveUrl
-		attestations = append(attestations, resp)
+		if resp != nil {
+			resp.EnclaveUrl = enclaveUrl
+			attestations = append(attestations, resp)
+		}
 	}
 
 	c.logger.Printf("Notarize: notarized and attested random number using %d attesters", len(c.notarizer))

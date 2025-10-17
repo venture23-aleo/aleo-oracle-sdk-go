@@ -7,6 +7,7 @@ import (
 const (
 	// Request timeout used by default for Client's methods
 	DEFAULT_TIMEOUT = 5 * time.Second
+	MAX_RESPONSE_BODY_SIZE = 1024 * 1024 * 5 // 5MB
 )
 
 var (
