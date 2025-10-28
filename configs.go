@@ -40,4 +40,9 @@ type ClientConfig struct {
 
 	// Optional transport configuration. If not provided, the a transport similar to [http.DefaultTransport] will be used.
 	Transport http.RoundTripper
+
+	// Optional mutual TLS configuration. When provided, the client will present the certificate
+	// when establishing a TLS connection to notarizer or verifier backends. If Transport is provided
+	// it MUST be of type *http.Transport for mTLS configuration to be applied.
+	MtlsConfig *MTLSConfig
 }

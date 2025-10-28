@@ -31,6 +31,7 @@ type requestContext struct {
 // Builds a URL using the backend information, path, and optionally resolved IP address.
 // Do not use with queries, they will be escaped
 func getFullAddress(path string, queryParams map[string]string, backend *CustomBackendConfig, ip *string) string {
+	backendClone := *backend
 	full := new(url.URL)
 
 	if queryParams != nil {
@@ -41,30 +42,30 @@ func getFullAddress(path string, queryParams map[string]string, backend *CustomB
 		full.RawQuery = query.Encode()
 	}
 
-	if backend.HTTPS {
+	if backendClone.HTTPS {
 		full.Scheme = "https"
-		if backend.Port == 0 {
-			backend.Port = 443
+		if backendClone.Port == 0 {
+			backendClone.Port = 443
 		}
 	} else {
 		full.Scheme = "http"
-		if backend.Port == 0 {
-			backend.Port = 80
+		if backendClone.Port == 0 {
+			backendClone.Port = 80
 		}
 	}
 
 	// if we're using an IP address, we always add the port.
 	// if we're not, then add the port only if it's not standard for the scheme
 	if ip == nil {
-		full.Host = backend.Address
-		if (backend.HTTPS && backend.Port != 443) || (!backend.HTTPS && backend.Port != 80) {
-			full.Host = fmt.Sprintf("%s:%d", backend.Address, backend.Port)
+		full.Host = backendClone.Address
+		if (backendClone.HTTPS && backendClone.Port != 443) || (!backendClone.HTTPS && backendClone.Port != 80) {
+			full.Host = fmt.Sprintf("%s:%d", backendClone.Address, backendClone.Port)
 		}
 	} else {
-		full.Host = fmt.Sprintf("%s:%d", *ip, backend.Port)
+		full.Host = fmt.Sprintf("%s:%d", *ip, backendClone.Port)
 	}
 
-	full.Path, _ = url.JoinPath(backend.ApiPrefix, path)
+	full.Path, _ = url.JoinPath(backendClone.ApiPrefix, path)
 
 	return full.String()
 }
@@ -98,34 +99,39 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	defer wg.Done()
 
 	respObj, err := client.Do(req)
+
 	if err != nil {
 		errChan <- fmt.Errorf("failed to execute request: %w", err)
 		return
+	} 
+	defer respObj.Body.Close()
+
+	if err := ctx.Err(); err != nil {
+		errChan <- fmt.Errorf("request cancelled: %w", err)
+    	return
 	}
 
-	// check if cancelled
-	select {
-	case <-ctx.Done():
+	if respObj.ContentLength != -1 && respObj.ContentLength > MAX_RESPONSE_BODY_SIZE {
+		errChan <- fmt.Errorf("response body is too large")
 		return
-	default:
 	}
 
-	body, err := io.ReadAll(respObj.Body)
+	// limit the response body size
+	limitReader := io.LimitReader(respObj.Body, MAX_RESPONSE_BODY_SIZE+1)
+
+	body, err := io.ReadAll(limitReader)
 	if err != nil {
 		errChan <- fmt.Errorf("failed to read response body: %w", err)
 		return
 	}
-	defer respObj.Body.Close()
+
+	if int64(len(body)) > MAX_RESPONSE_BODY_SIZE {
+    	errChan <- fmt.Errorf("response body exceeded %d bytes", MAX_RESPONSE_BODY_SIZE)
+    	return
+	}
 
 	resp := new(ResponseType)
 	respError := new(oracleError)
-
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-		return
-	default:
-	}
 
 	// decode as an error first since we know the exact type and can check if it's the error response or success response
 	err = json.Unmarshal(body, respError)
@@ -154,16 +160,9 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 	// if there's no error message, and the status code is not 200, something went really wrong, e.g. at the routing/balancing level.
 	// note that this is different from the resp.ResponseStatusCode in AttestationResponse and TestSelectorResponse since it's the response status code
 	// of the attestation target.
-	if respObj.StatusCode != 200 {
+	if respObj.StatusCode != http.StatusOK {
 		errChan <- fmt.Errorf("request failed: %s", respObj.Status)
 		return
-	}
-
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-		return
-	default:
 	}
 
 	// there's no error message, test if it's a successful response
@@ -174,13 +173,18 @@ func executeRequestInternal[ResponseType interface{}](ctx context.Context, req *
 		return
 	}
 
-	// check if cancelled
-	select {
-	case <-ctx.Done():
-	default:
+	if err := ctx.Err(); err != nil {
+		errChan <- fmt.Errorf("request cancelled: %w", err)
+    	return
 	}
 
-	resChan <- resp
+	// Non-blocking write to success channel (successInternalCh)
+    select {
+    case resChan <- resp:
+    case <-ctx.Done():
+    default: // drop if already full
+    }
+
 }
 
 // creates an HTTP request of provided method (can be only GET or POST) to the provided URL, with an optional body of RequestType,
@@ -211,26 +215,35 @@ func executeRequest[RequestType interface{}, ResponseType interface{}](path stri
 		resolvedAddresses = []string{ctx.Backend.Address}
 	}
 
+	if ctx.Transport == nil {
+		errChan <- fmt.Errorf("executeRequest: transport is nil for %s", host)
+		return
+	} else if _, ok := ctx.Transport.(*http.Transport); !ok {
+		errChan <- fmt.Errorf("executeRequest: transport is not of type *http.Transport for %s", host)
+		return
+	}
+
 	transport := ctx.Transport
 
 	// the infrastructure uses SNI for routing. since we looked up the hostname
 	// and we want to send requests to all IPs, we have to use the addresses for request.
 	// this also means we have to set the servername in the TLS config for SNI.
-	transportRaw := *(transport.(*http.Transport))
-	if transportRaw.TLSClientConfig == nil {
-		transportRaw.TLSClientConfig = &tls.Config{}
+	origTransport := transport.(*http.Transport)
+	transportCloned := origTransport.Clone()
+	if transportCloned.TLSClientConfig == nil {
+		transportCloned.TLSClientConfig = &tls.Config{}
 	}
 
 	// Set SNI for routing
-	transportRaw.TLSClientConfig.ServerName = ctx.Backend.Address
+	transportCloned.TLSClientConfig.ServerName = ctx.Backend.Address
 	// Since our infrastructure performs routing on TCP level to the notarizer, which then upgrades
 	// protocol to HTTP, changing the SNI to verifier.aleooracle.xyz doesn't actually reroute us to the verifier
 	// because we're stuck in the notarizer's HTTP connection. Disabling HTTP "keep alive"s allows the proxy
 	// to escape the notarizer's HTTP connection and route again on TCP level to the verifier's HTTP server.
 	// This wasn't relevant when resolving was disabled for the verifier.
-	transportRaw.DisableKeepAlives = true
+	transportCloned.DisableKeepAlives = true
 
-	transport = &transportRaw
+	transport = transportCloned
 
 	// common client to use for all resolved IP addresses. it has the SNI already configured
 	client := &http.Client{

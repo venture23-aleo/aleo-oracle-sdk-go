@@ -14,3 +14,20 @@ Users are advised to exercise caution when using this software and to not deploy
 The maintainers of this repository cannot be held liable for any damages or security breaches that may occur as a result of its use.
 By accessing and using the contents of this repository, you agree to do so at your own risk.
 
+## Mutual TLS
+
+You can optionally configure the SDK to use mutual TLS (mTLS) when connecting to custom notarizer / verifier backends by providing an `MTLSConfig` in `ClientConfig`:
+
+```go
+client, err := NewClient(&ClientConfig{
+ MtlsConfig: &MTLSConfig{
+  ClientCertPath:      "/path/to/client.crt",
+  ClientKeyPath:       "/path/to/client.key",
+  CaCertPath:          "/optional/extra/ca-bundle.pem", // optional
+  ServerNameOverride:  "override.example.internal",     // optional
+  InsecureSkipVerify:  false,                            // DO NOT enable in production
+ },
+})
+```
+
+If you also supply a custom `Transport`, it must be of type `*http.Transport` for the mTLS settings to be applied.
