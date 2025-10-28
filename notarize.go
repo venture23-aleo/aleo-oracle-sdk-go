@@ -57,12 +57,7 @@ const (
 
 var (
 	// Default headers that will be added to the attestation request.
-	DEFAULT_NOTARIZATION_HEADERS = map[string]string{
-		"Accept":                    "*/*",
-		"User-Agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-		"Upgrade-Insecure-Requests": "1",
-		"DNT":                       "1",
-	}
+	DEFAULT_NOTARIZATION_HEADERS = map[string]string{}
 )
 
 // EncodingOptions is a type containing information about how Notarization Backend should interpret the Attestation Data to encode it to Aleo format.
